@@ -1,7 +1,7 @@
-all: goo
+all: slopi
 
-clean: goo	
-	rm goo
+clean: slopi	
+	rm slopi
 
-goo: goo.c Makefile
-	gcc -Ofast -march=core2 -Wno-unused-result -o goo goo.c modp_numtoa.o -lm -pthread
+slopi: slopi.c Makefile
+	gcc -Ofast -march=core2 -Wno-unused-result -o slopi slopi.c modp_numtoa.o -lm -pthread
