@@ -1,14 +1,17 @@
 /* Find self-locating numbers in numbers, esp. in Pi.
- * For speed consideration, we do not check call failures.
+ * For speed consideration, not all call errors are handles.
  * modp_numtoa is from stringencoders at 
  *     https://code.google.com/p/stringencoders/wiki/NumToA
- * Since Dec 7 2011
+ *
+ * Copyright (c) Yongzhi Pan, Since Dec 7 2011
+ * License is GPL v3
  */
 
 #define _GNU_SOURCE
 #include "modp_numtoa.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -18,8 +21,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#if LONG_MAX < 1000000000000
+#error Your compiler`s long int type is too small!
+#endif
+
 #define OFFSET 2 // How many bytes to bypass. For 3.1415... OFFSET is 2.
-#define err_exit(en, msg) do { errno=en; perror(msg); exit(EXIT_FAILURE); } while (0)
+#define err_exit(en, msg) \
+    do { errno=en; perror(msg); exit(EXIT_FAILURE); } while (0)
 
 static void *find(void *file) {
     // set CPU affinity
@@ -37,7 +45,7 @@ static void *find(void *file) {
     char *infile = (char *)file;
     struct stat stat_buf;
     int fd;
-    int N;
+    long N;
     int num_read;
 
     stat(infile, &stat_buf);
@@ -51,7 +59,7 @@ static void *find(void *file) {
     int maxlen = (int)ceil(log10f((float)N));
     char buf[2*maxlen];
     //printf("maxlen: %d\n", maxlen);
-    int n = 1;
+    long n = 1;
     int len = 1;
     sprintf(buf, "%d", 1);
     // FIXME detect error
@@ -62,7 +70,7 @@ static void *find(void *file) {
         if(!memcmp(buf, buf+len, len))
             printf("%.*s\t\t\t%lx\n", \
                     len, buf, (unsigned long)(pthread_self()));
-        modp_itoa10(n+1, buf); // XXX Only support up to int32
+        modp_litoa10(n+1, buf);
         len = strlen(buf);
     } while((n=lseek(fd, n+OFFSET, SEEK_SET)-OFFSET+1) < N);
     //   ^ off_t is signed int by SUSv3 type requirement
@@ -72,14 +80,16 @@ int main(int argc, char *argv[]) {
     // FIXME detect error
     long num_cpu =  sysconf(_SC_NPROCESSORS_ONLN);
     printf("CPU number: %ld\n", num_cpu);
-    char *files[num_cpu];
+    //char *files[num_cpu];
+    const char * const files[2] = {"xac", "xad"};
 
     if(num_cpu == 2) {
         // FIXME initialize once
-        files[0] = "xaa";
-        files[1] = "xab";
+        // FIXME get file names from argv
+        //files[0] = "xaa";
+        //files[1] = "xab";
+        ;
     }
-    //const char * const files[num_cpu] = {"xac", "xad"};
 
     //char *files[argc-1][num_cpu];
     pthread_t tid[num_cpu];
@@ -104,7 +114,9 @@ int main(int argc, char *argv[]) {
     for(i=0; i<num_cpu; i++)
         // FIXME detect error
         pthread_join(tid[i], NULL);
-    //printf("%lu, %d\n", sizeof(cpu_set_t), CPU_SETSIZE);
 
+    //printf("INT_MAX: %d, LONG_MAX: %ld, LLONG_MAX, %lld\n", INT_MAX, LONG_MAX, LLONG_MAX);
+    printf("int32_t: %lu, int64_t: %lu\n", sizeof(int32_t), sizeof(int64_t));
+    printf("off_t: %lu, off64_t: %lu\n", sizeof(off_t), sizeof(off64_t));
     return 0;
 }
