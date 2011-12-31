@@ -35,13 +35,13 @@ static void *find(void *file) {
     // set CPU affinity
     // FIXME fixed two threads onto the same core, slows down.
     /*
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    CPU_SET(1, &set);
-    s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set);
-    if(s != 0)
-        err_exit_en(s, "pthread_setaffinity_np");
-        */
+       cpu_set_t set;
+       CPU_ZERO(&set);
+       CPU_SET(1, &set);
+       s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &set);
+       if(s != 0)
+       err_exit_en(s, "pthread_setaffinity_np");
+       */
 
     char *infile = (char *)file;
     struct stat stat_buf;
@@ -49,7 +49,7 @@ static void *find(void *file) {
     off_t N;
     off_t n = 1;
     int len = 1;
-    
+
 
     stat(infile, &stat_buf);
     N = stat_buf.st_size;
@@ -68,15 +68,16 @@ static void *find(void *file) {
         err_exit("lseek");
     do {
         // For speed consideration, not all call errors are handled.
-        read(fd, buf+len, len);
+        //read(fd, buf+len, len);
         //printf("buf: %.*s, len: %d, n: %d\n", 2*len, buf, len, n);
         if(!memcmp(buf, buf+len, len))
             printf("%.*s\t\t\t%lx\n", \
                     len, buf, (unsigned long)(pthread_self()));
         modp_litoa10(n+1, buf);
-        // FIXME XXX
+        // strlen works here. Since modp_litoa10 appends '\0' to buf.
         len = strlen(buf);
-    } while( (n=lseek(fd, n+OFFSET, SEEK_SET)-OFFSET+1) < N );
+        n = lseek(fd, n+OFFSET, SEEK_SET) - OFFSET + 1;
+    } while (n < N);
     return NULL;
 }
 
