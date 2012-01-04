@@ -4,7 +4,7 @@ Self-locating numbers are numbers that the number n is at postion n (after the d
 
 I have found the first 5 such numbers. It is a quick python script, which runs 22 minutes on my laptop to find them. I am now looking for the next one from 1 trillion digits of Pi.
 
-The C program is Linux-dependent.
+The C program is developed under Linux, but may also run on various Unix's.
 
 Links:
 
