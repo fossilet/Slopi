@@ -1,4 +1,4 @@
-This project is to find self-locating numbers in Pi.
+This project's goal is to find self-locating numbers in Pi.
 
 Self-locating numbers are numbers that the number n is at postion n (after the decimal point) in decimal digits of Pi. 
 
@@ -9,7 +9,9 @@ The C program is developed under Linux, but may also run on various Unix's.
 Links:
 
 Self-locating numbers in Pi: http://oeis.org/A057680
+
 One billion digits of Pi: http://stuff.mit.edu/afs/sipb/contrib/pi/
+
 NumToA: http://code.google.com/p/stringencoders/wiki/NumToA
 
 -----------------------------------
