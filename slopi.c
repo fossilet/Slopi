@@ -47,9 +47,8 @@ static void *find(void *file) {
     struct stat stat_buf;
     int fd;
     off_t N;
-    off_t n = 1;
+    register off_t n = 1;
     int len = 1;
-
 
     stat(infile, &stat_buf);
     N = stat_buf.st_size;
@@ -68,7 +67,7 @@ static void *find(void *file) {
         err_exit("lseek");
     do {
         // For speed consideration, not all call errors are handled.
-        //read(fd, buf+len, len);
+        read(fd, buf+len, len);
         //printf("buf: %.*s, len: %d, n: %d\n", 2*len, buf, len, n);
         if(!memcmp(buf, buf+len, len))
             printf("%.*s\t\t\t%lx\n", \
@@ -121,4 +120,4 @@ int main(int argc, char *argv[]) {
     }
 
     return 0;
-}
+??>
