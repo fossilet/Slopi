@@ -10,6 +10,7 @@
 
 #define _GNU_SOURCE
 #include "modp_numtoa.h"
+#include "search.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -24,12 +25,10 @@
 #if LONG_MAX <= 10000000
 #error Your compiler`s long int type is too small!
 #endif
-
+#define CACHESIZE 10
 // Number of bytes to bypass. 
 // in order to make 1 the 1st digit of pi (3.1415...), we set OFFSET to 1.
-// This is DIFFERENT from Peter's definition!
 #define OFFSET 1
-#define CACHESIZE 10
 #define err_exit_en(en, msg) \
   do { errno=en; perror(msg); exit(EXIT_FAILURE); } while (0)
 #define err_exit(msg) \
@@ -43,150 +42,7 @@ int fast_log10_ceil (long v) {
 }
 
 
-// Knuth-Morris-Pratt
-void prefixKMP (char *pattern, int patternLength, int * kmpPi) {
-  int i, j;
-
-  i = 0;
-  j = kmpPi[0] = -1;
-
-  // in the first run, when the second while is finished
-  // the j = 0, which agrees with KMP algorithm
-
-  while (i < patternLength) {
-    while (j > -1 && pattern[i] != pattern[j])
-      j = kmpPi[j];
-
-    i++;
-    j++;
-
-    if(pattern[i] == pattern[j])
-      kmpPi[i] = kmpPi[j];
-    else
-      kmpPi[i] = j;
-  }
-}
-
-void searchInKMP(char * pattern, int patternLength, 
-    char * text, int textLength, int * addr) {
-
-  int i, j;
-  //int kmpPi[patternLength];
-  // this is somewhat unreliable because we assumed sizeof(int) = 4
-  int * kmpPi = (int *)malloc((patternLength << 2));
-
-  // preprocessing
-  i = 0;
-  j = kmpPi[0] = -1;
-
-  // in the first run, when the second while is finished
-  // the j = 0, which agrees with KMP algorithm
-  prefixKMP(pattern, patternLength, kmpPi);
-
-  // searching
-  i = j = 0;
-  while (j < textLength) {
-    while (i > -1 && pattern[i] != text[j])
-      i = kmpPi[i];
-    i++;
-    j++;
-    if (i >= patternLength ) {
-      // binary representation of matches
-      *addr += (1 << (j - i));
-      i = kmpPi[i];
-    }
-  }
-
-  free(kmpPi);
-}
-
-
-// Boyer-Moore
-#define max(a, b) ((a < b) ? b : a)
-void preBmBc(char *x, int m, int bmBc[]) {
-  int i;
-
-  for (i = 0; i < CACHESIZE; ++i)
-    bmBc[i] = m;
-  for (i = 0; i < m - 1; ++i)
-    bmBc[x[i]] = m - i - 1;
-}
-
-void suffixes(char *x, int m, int * suff) {
-  int f, g, i;
-
-  suff[m - 1] = m;
-  g = m - 1;
-  for (i = m - 2; i >= 0; --i) {
-    if (i > g && suff[i + m - 1 - f] < i - g)
-      suff[i] = suff[i + m - 1 - f];
-    else {
-      if (i < g)
-        g = i;
-      f = i;
-      while (g >= 0 && x[g] == x[g + m - 1 - f])
-        --g;
-      suff[i] = f - g;
-    }
-  }
-}
-
-void preBmGs(char *x, int m, int bmGs[]) {
-  int i, j, suff[m];
-
-  suffixes(x, m, suff);
-
-  for (i = 0; i < m; ++i)
-    bmGs[i] = m;
-  j = 0;
-  for (i = m - 1; i >= 0; --i)
-    if (suff[i] == i + 1)
-      for (; j < m - 1 - i; ++j)
-        if (bmGs[j] == m)
-          bmGs[j] = m - 1 - i;
-  for (i = 0; i <= m - 2; ++i)
-    bmGs[m - 1 - suff[i]] = m - 1 - i;
-
-  free(suff);
-}
-
-void searchInBM(char *x, int m, char *y, int n, int * addr) {
-  int i, j, bmGs[m], bmBc[CACHESIZE];
-
-  /* Preprocessing */
-  preBmGs(x, m, bmGs);
-  preBmBc(x, m, bmBc);
-
-  /* Searching */
-  j = 0;
-  while (j <= n - m) {
-    for (i = m - 1; i >= 0 && x[i] == y[i + j]; --i);
-    if (i < 0) {
-      // binary representation of matches      
-      *addr += (1 << j);
-      j += bmGs[0];
-    }
-    else
-      j += max(bmGs[i], bmBc[y[i + j]] - m + 1 + i);
-  }
-}
-
-
-// Brutal Force
-void searchInBF(char * pattern, int patternLength, 
-    char * text, int textLength, int *addr) {
-  int i, j;
-
-  /* Searching */
-  for (j = 0; j <= textLength - patternLength; ++j) {
-    for (i = 0; i < patternLength && pattern[i] == text[i + j]; ++i);
-    if (i >= patternLength)
-      // binary representation of matches
-      *addr += (1 << j);
-  }
-}
-
-static void * find(void * file) {
+static void *find(void *file) {
   int s;
   // set CPU affinity
   // FIXME fixed two threads onto the same core, slows down.
@@ -199,17 +55,13 @@ static void * find(void * file) {
      err_exit_en(s, "pthread_setaffinity_np");
      */
 
-  char * infile = (char *)file;
+  char *infile = (char *)file;
   struct stat stat_buf;
   int fd;
   off_t N;
   //register off_t n = 1;
   int maxlen;
   
-  // maybe it's not needed?
-  // num_read = read(...
-  //int num_read;
-
   // get file size
   stat(infile, &stat_buf);
   N = stat_buf.st_size;
@@ -219,7 +71,8 @@ static void * find(void * file) {
   // open pi data file
   fd = open(infile, O_RDONLY);
   // file won't open
-  if (fd == -1) err_exit("open");
+  if (fd == -1)
+      err_exit("open");
 
   // according to 
   // echo "" | gcc -E -dM -c - | grep linux
@@ -279,13 +132,15 @@ static void * find(void * file) {
       i--;      
       // if match found
       if (matches >> i & 1 && buf[len+i] - '0' == i)
-        printf("%s%d\n", numberString, i);
+        printf("%s%d\t\t\t%lx\n", numberString, i, (unsigned long)pthread_self());
     }
     j += CACHESIZE;
   }
 
   free(buf);
   free(numberString);
+  
+  return NULL;
 }
 
 int main(int argc, char *argv[]) {
