@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 all: slopi
 
 clean: slopi
@@ -13,3 +14,12 @@ slopi.intel: slopi.c Makefile
 
 slopi.oldgcc: slopi.c Makefile
 	gcc -O3 -std=c99 -Wall -o slopi slopi.c modp_numtoa.c -lm -pthread
+=======
+all: slopi 
+
+clean: slopi 
+	rm slopi
+
+slopi: slopi.c Makefile
+	gcc -O3 -o slopi slopi.c modp_numtoa.c -lm -pthread
+>>>>>>> th507/master
