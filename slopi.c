@@ -2,22 +2,24 @@
  * modp_numtoa is from stringencoders at 
  *     https://code.google.com/p/stringencoders/wiki/NumToA
  *
- *  Last Modified: Fri 06 Jan 2012 09:43:05 PM (Minor tweaks by @th507)
+ *  Last Modified: Fri 06 Jan 2012 11:35:35 PM (tweaked/forked by @th507)
  *
  * Copyright (c) Yongzhi Pan, Since Dec 7 2011
  *
  * License is GPL v3
  */
 
+#define _GNU_SOURCE
 #include "modp_numtoa.h"
 #include <errno.h>
 #include <fcntl.h>
-//#include <limits.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+// seems that this file is not needed
 //#include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -28,6 +30,7 @@
 #error Your compiler`s long int type is too small!
 #endif
 */
+
 // redundant, but what the heck...
 #define SEEK_SET 0
 
@@ -47,6 +50,7 @@ int fast_log10_ceil (long v) {
     (v >= 1000000) ? 7 : (v >= 100000) ? 6 : (v >= 10000) ? 5 : 
     (v >= 1000) ? 4 : (v >= 100) ? 3 : (v >= 10) ? 2 : 1;
 }
+
 
 // Knuth-Morris-Pratt
 void prefixKMP (char *pattern, int patternLength, int * kmpPi) {
@@ -105,17 +109,17 @@ void searchInKMP(char * pattern, int patternLength,
   free(kmpPi);
 }
 
+
 // Boyer-Moore
 #define max(a, b) ((a < b) ? b : a)
 void preBmBc(char *x, int m, int bmBc[]) {
   int i;
 
-  for (i = 0; i < 10; ++i)
+  for (i = 0; i < CACHESIZE; ++i)
     bmBc[i] = m;
   for (i = 0; i < m - 1; ++i)
     bmBc[x[i]] = m - i - 1;
 }
-
 
 void suffixes(char *x, int m, int * suff) {
   int f, g, i;
@@ -137,8 +141,7 @@ void suffixes(char *x, int m, int * suff) {
 }
 
 void preBmGs(char *x, int m, int bmGs[]) {
-  int i, j;
-  int * suff = (int *)malloc((m << 2));
+  int i, j, suff[m];
 
   suffixes(x, m, suff);
 
@@ -157,9 +160,7 @@ void preBmGs(char *x, int m, int bmGs[]) {
 }
 
 void searchInBM(char *x, int m, char *y, int n, int * addr) {
-  int i, j;
-  int * bmGs = (int *)malloc((m << 2));
-  int * bmBc = (int *)malloc((10 << 2));
+  int i, j, bmGs[m], bmBc[CACHESIZE];
 
   /* Preprocessing */
   preBmGs(x, m, bmGs);
@@ -177,10 +178,8 @@ void searchInBM(char *x, int m, char *y, int n, int * addr) {
     else
       j += max(bmGs[i], bmBc[y[i + j]] - m + 1 + i);
   }
-
-  free(bmGs);
-  free(bmBc);
 }
+
 
 // Brutal Force
 void searchInBF(char * pattern, int patternLength, 
@@ -213,8 +212,10 @@ static void * find(void * file) {
   struct stat stat_buf;
   int fd;
   off_t N;
-  off_t n = 1;
+  //register off_t n = 1;
   int maxlen;
+  
+  // maybe it's not needed?
   // num_read = read(...
   //int num_read;
 
@@ -233,39 +234,38 @@ static void * find(void * file) {
   // echo "" | gcc -E -dM -c - | grep linux
   // we should check for __linux, __linux__, __gnu_linux__, linux
   // what the heck...
-#ifdef __linux__
-  s = posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-  if(s != 0)
-    err_exit_en(s, "posix_fadvise");
-#endif 
+  #ifdef __linux__
+    s = posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+    if(s != 0)
+      err_exit_en(s, "posix_fadvise");
+  #endif 
 
   // failed to perform 'lseek'
   if (lseek(fd, OFFSET, SEEK_SET) == (off_t)-1)
     err_exit("lseek");
 
-
-  // pending deletion
-  int i;
-
-
+  // mayber it's not needed?
   // k = lseek(...
   //long k;
 
   // create a buffer from string comparison
-  // this method results in error like 'num_read is 1415926535?'
-  //char buf[10+maxlen];
+  // this method sometimes results in error 
+  // like 'num_read is 1415926535?' on Mac
+  //char buf[CACHESIZE + maxlen];
+  //char numberString[maxlen];
+
+  // this works fine on Mac but crash on Linux
   char * buf = (char *)malloc(CACHESIZE + maxlen);
   char * numberString = (char *)malloc(maxlen);
 
   int matches = 0;
+  // make it a 'global variable'
   int * addressOfMatches = &matches;
 
-  // don't know what's off_t
+  int i, len = 1;
+  
   // this method cannot be used for j < CACHESIZE
-
   long j = CACHESIZE;
-
-  int len = 1;
   while (j < N) { // buf never gets reset, maybe it OUGHT TO
     lseek(fd, (j+OFFSET), SEEK_SET);
 
@@ -287,21 +287,20 @@ static void * find(void * file) {
     while (i) {
       i--;      
       // if match found
-      if (matches >> i & 1 && buf[len+i] - '0' == i) {
+      if (matches >> i & 1 && buf[len+i] - '0' == i)
         printf("%s%d\n", numberString, i);
-      }
     }
-
-    j+=CACHESIZE;
+    j += CACHESIZE;
   }
 
-  free(numberString);
   free(buf);
+  free(numberString);
 }
 
 int main(int argc, char *argv[]) {
   int num_cpu = sysconf(_SC_NPROCESSORS_ONLN);
-  if (num_cpu == -1) err_exit("sysconf"); 
+  if (num_cpu == -1)
+    err_exit("sysconf"); 
   printf("CPU number: %d\n", num_cpu);
   //char *files[num_cpu];
   const char * const files[2] = {"xac", "xad"};
@@ -310,14 +309,20 @@ int main(int argc, char *argv[]) {
   //int j;
   int s;
 
+    if(num_cpu == 2) {
+        // FIXME initialize once
+        // FIXME get file names from argv
+        //files[0] = "xaa";
+        //files[1] = "xab";
+        ;
+    }
 
-  // COMMENTS
-  /*
-     for(j=0; j<argc-1; j++) {
-     files[j][0] = argv[2*j+1];
-     files[j][1] = argv[2*j+2];
-     }
-     */
+    /*
+    for(j=0; j<argc-1; j++) {
+        files[j][0] = argv[2*j+1];
+        files[j][1] = argv[2*j+2];
+    }
+    */
 
   for(i=0; i<num_cpu; i++) {
     s = pthread_create(&tid[i], NULL, find, (void *)files[i]);
