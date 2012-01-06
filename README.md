@@ -2,7 +2,7 @@ This project's goal is to find self-locating numbers in Pi.
 
 Self-locating numbers are numbers that the number n is at postion n (after the decimal point) in decimal digits of Pi. 
 
-I have found the first 5 such numbers. It is a quick python script, which runs 22 minutes on my laptop to find them. I am now looking for the next one from 1 trillion digits of Pi.
+The first 5 such numbers are 1, 16470, 44899, 79873884 and 711939213. It is a quick python script, which runs 22 minutes on my laptop to find them. I am now looking for the next one from 1 trillion digits of Pi.
 
 The C program is developed under Linux, but may also run on various Unix's.
 
